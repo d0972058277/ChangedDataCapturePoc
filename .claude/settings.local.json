@@ -6,7 +6,8 @@
       "Bash(docker exec:*)",
       "Bash(cmd:*)",
       "Bash(dotnet run:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": []
