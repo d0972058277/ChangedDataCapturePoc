@@ -1,0 +1,24 @@
+{
+  "name": "mongo-wagers",
+  "config": {
+    "connector.class": "io.debezium.connector.mongodb.MongoDbConnector",
+    "tasks.max": "1",
+    "mongodb.hosts": "rs0/mongodb:37017",
+    "mongodb.name": "mongo_cdc",
+    "database.include.list": "inventory",
+    "collection.include.list": "inventory.wagers",
+    "topic.prefix": "mongo",
+    "publish.full.document.only": "true",
+    "mongodb.members.auto.discover": "false",
+    "mongodb.connection.string": "mongodb://mongodb:37017/?replicaSet=rs0",
+    "mongodb.ssl.enabled": "false",
+    "heartbeat.interval.ms": "1000",
+    "snapshot.mode": "initial",
+    "max.batch.size": "2048",
+    "max.queue.size": "8192",
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.connector.mongodb.transforms.ExtractNewDocumentState",
+    "transforms.unwrap.drop.tombstones": "true",
+    "transforms.unwrap.delete.handling.mode": "rewrite"
+  }
+}

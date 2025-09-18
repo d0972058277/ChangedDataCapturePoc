@@ -1,0 +1,143 @@
+services:
+  mongodb:
+    image: mongo:8.0
+    container_name: cdc-mongodb
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "37017"]
+    ports:
+      - "37027:37017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--host", "localhost", "--port", "37017", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  mongo-init:
+    image: mongo:8.0
+    container_name: cdc-mongo-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    entrypoint: ["bash", "-c", "mongosh --quiet --host mongodb --port 37017 /scripts/init-replica.js"]
+    volumes:
+      - ./mongo/init-replica.js:/scripts/init-replica.js:ro
+    restart: "no"
+
+  kafka:
+    image: bitnami/kafka:3.6.2
+    container_name: cdc-kafka
+    ports:
+      - "39092:39092"
+    environment:
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:29093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:29092,CONTROLLER://:29093,EXTERNAL://:39092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,EXTERNAL://localhost:39092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_NUM_PARTITIONS=1
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_BROKER_ID=1
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    healthcheck:
+      test: ["CMD", "bash", "-c", "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: cdc-kafka-ui
+    ports:
+      - "38080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=mongo-cdc
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  kafka-connect:
+    image: debezium/connect:2.5
+    container_name: cdc-kafka-connect
+    ports:
+      - "38083:8083"
+    environment:
+      - BOOTSTRAP_SERVERS=kafka:29092
+      - GROUP_ID=mongo-connect
+      - CONFIG_STORAGE_TOPIC=mongo_connect_configs
+      - OFFSET_STORAGE_TOPIC=mongo_connect_offsets
+      - STATUS_STORAGE_TOPIC=mongo_connect_statuses
+      - CONFIG_STORAGE_REPLICATION_FACTOR=1
+      - OFFSET_STORAGE_REPLICATION_FACTOR=1
+      - STATUS_STORAGE_REPLICATION_FACTOR=1
+      - VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - VALUE_CONVERTER_SCHEMAS_ENABLE=false
+      - KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - KEY_CONVERTER_SCHEMAS_ENABLE=false
+      - ENABLE_DEBEZIUM_SCRIPTING=false
+      - CONNECT_REST_ADVERTISED_HOST_NAME=kafka-connect
+      - CONNECT_REST_PORT=8083
+      - CONNECT_PLUGIN_PATH=/kafka/connect,/debezium-plugins
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+
+  kafka-topic-init:
+    image: bitnami/kafka:3.6.2
+    container_name: cdc-kafka-topic-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: >
+      bash -lc "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 \
+      --create --if-not-exists --topic mongo.inventory.wagers --partitions 1 --replication-factor 1"
+    restart: "no"
+
+  flink-jobmanager:
+    build:
+      context: ./flink
+      dockerfile: Dockerfile
+    image: cdc-flink:latest
+    container_name: cdc-flink-jobmanager
+    ports:
+      - "38081:8081"
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: flink-jobmanager
+      FLINK_PROPERTIES: |
+        taskmanager.numberOfTaskSlots: 2
+    command: jobmanager
+    volumes:
+      - ./flink/sql:/opt/flink/sql:ro
+      - ./flink/output:/opt/flink/output
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  flink-taskmanager:
+    image: cdc-flink:latest
+    container_name: cdc-flink-taskmanager
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: flink-jobmanager
+      FLINK_PROPERTIES: |
+        taskmanager.numberOfTaskSlots: 2
+    command: taskmanager
+    volumes:
+      - ./flink/output:/opt/flink/output
+    depends_on:
+      flink-jobmanager:
+        condition: service_started
+
+networks:
+  default:
+    name: mongo-cdc-demo

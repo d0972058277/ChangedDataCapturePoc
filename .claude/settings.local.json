@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose:*)",
+      "Bash(./scripts/register-mongo-connector.ps1)",
+      "Bash(docker exec:*)",
+      "Bash(cmd:*)",
+      "Bash(dotnet run:*)",
+      "Bash(curl:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
