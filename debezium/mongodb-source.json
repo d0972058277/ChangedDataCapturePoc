@@ -16,11 +16,13 @@
                    "snapshot.mode":  "initial",
                    "max.batch.size":  "2048",
                    "max.queue.size":  "8192",
-                   "transforms":  "unwrap",
+                   "transforms":  "unwrap,dropEvents",
                    "transforms.unwrap.type":  "io.debezium.connector.mongodb.transforms.ExtractNewDocumentState",
                    "transforms.unwrap.drop.tombstones":  "true",
                    "transforms.unwrap.delete.handling.mode":  "rewrite",
                    "snapshot.aggregate.pipeline":  "[{\"$match\":{\"endTime\":{\"$exists\":true,\"$ne\":null}}}]",
-                   "cursor.pipeline":  "[{\"$match\":{\"$or\":[{\"fullDocument.endTime\":{\"$exists\":true,\"$ne\":null}},{\"updateDescription.updatedFields.endTime\":{\"$exists\":true}}]}}]"
+                   "cursor.pipeline":  "[{\"$match\":{\"$or\":[{\"fullDocument.endTime\":{\"$exists\":true,\"$ne\":null}},{\"updateDescription.updatedFields.endTime\":{\"$exists\":true}}]}}]",
+                   "transforms.dropEvents.type":  "org.apache.kafka.connect.transforms.ReplaceField$Value",
+                   "transforms.dropEvents.exclude":  "events"
                }
 }
