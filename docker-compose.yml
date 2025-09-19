@@ -66,7 +66,7 @@ services:
         condition: service_healthy
 
   kafka-connect:
-    image: debezium/connect:2.5
+    image: quay.io/debezium/connect:3.0
     container_name: cdc-kafka-connect
     ports:
       - "38083:8083"

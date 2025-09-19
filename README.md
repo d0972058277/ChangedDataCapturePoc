@@ -91,6 +91,7 @@ All ports are carefully chosen to reduce the likelihood of conflicts with other 
    ```powershell
    dotnet run --project src/MongoChangeStreamSeeder
    ```
+   The seeder now generates 10 wagers per run, prints each document, and reports how many were confirmed, canceled, or left pending. Only wagers with a non-null `endTime` reach Kafka because the Debezium connector filters partial records.
    Optionally provide a SKU prefix: `dotnet run --project src/MongoChangeStreamSeeder DemoSKU`.
 
 5. **Observe data flow**
@@ -101,6 +102,16 @@ All ports are carefully chosen to reduce the likelihood of conflicts with other 
      ```sh
      docker compose logs -f flink-taskmanager
      ```
+
+## Debezium Connector Filtering
+
+- The Debezium connector (`debezium/mongodb-source.json`) sets both `snapshot.aggregate.pipeline` and `cursor.pipeline` so only wagers with `endTime` populated are published to Kafka.
+- After editing the file, reapply the settings with:
+  ```powershell
+  Invoke-WebRequest -Uri 'http://localhost:38083/connectors/mongo-wagers/config' -Method Put -ContentType 'application/json' -InFile 'debezium/mongodb-source-config.json'
+  ```
+  or use the `register-mongo-connector` scripts to update the running connector.
+- Historical Kafka messages created before the filter remain; start consumers with a new group or purge the topic if you need a clean stream.
 
 ## Connection Details
 
